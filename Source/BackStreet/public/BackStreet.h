@@ -4,4 +4,5 @@
 
 #include "EngineMinimal.h"
 #include "WeaponStatStructBase.h"
+#include "CollisionQueryParams.h"
 #include "CharacterInfoStructBase.h"

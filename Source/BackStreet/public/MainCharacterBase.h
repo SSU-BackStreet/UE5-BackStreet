@@ -43,6 +43,9 @@ public:
 		virtual void TryReload() override;
 
 	UFUNCTION(BlueprintCallable)
+		virtual void TryAttack() override;
+
+	UFUNCTION(BlueprintCallable)
 		virtual void Attack() override;
 
 	UFUNCTION(BlueprintCallable)

@@ -3,7 +3,6 @@
 #pragma once
 
 #include "BackStreet.h"
-#include "CollisionQueryParams.h"
 #include "WeaponStatStructBase.h"
 #include "GameFramework/Actor.h"
 #include "WeaponBase.generated.h"
@@ -112,16 +111,16 @@ public:
 
 	//현재 Combo 수를 반환 
 	UFUNCTION(BlueprintCallable, BlueprintPure)
-		int32 GetCurrentMeleeComboCnt() { return MeleeComboCnt; }
+		int32 GetCurrentComboCnt() { return ComboCnt; }
 
 	//Melee Combo 초기화
 	UFUNCTION()
-		void ResetMeleeCombo();
+		void ResetCombo();
 
 protected:
 	//현재 MeleeCombo 수
 	UPROPERTY(BlueprintReadOnly)
-		int32 MeleeComboCnt = 0;
+		int32 ComboCnt = 0;
 
 private:
 	//캐릭터 Ref
@@ -133,7 +132,9 @@ private:
 
 	UPROPERTY()
 		FTimerHandle MeleeComboTimerHandle;
-
+		
 	UPROPERTY()
 		float MeleeAtkComboRemainTime = 1.0f;
+
+	FCollisionQueryParams MeleeLineTraceQueryParams;
 };

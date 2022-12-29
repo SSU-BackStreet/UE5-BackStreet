@@ -3,11 +3,9 @@
 
 #include "WeaponBase.h"
 #include "CharacterBase.h"
-#include "CollisionQueryParams.h"
 #include "../public/ProjectileBase.h"
 
-FTimerHandle MeleeAtkDelayHandle;
-FCollisionQueryParams linetraceCollisionQueryParams;
+
 
 // Sets default values
 AWeaponBase::AWeaponBase()
@@ -40,15 +38,16 @@ void AWeaponBase::Attack()
 	if (WeaponStat.bCanMeleeAtk)
 	{
 		GetWorldTimerManager().SetTimer(MeleeAtkTimerHandle, this, &AWeaponBase::MeleeAttack, 0.01f, true);
-		GetWorldTimerManager().SetTimer(MeleeComboTimerHandle, this, &AWeaponBase::ResetMeleeCombo, 1.0f, false, 1.0f);
-		MeleeAttack();
-		MeleeComboCnt = (MeleeComboCnt + 1);
+		GetWorldTimerManager().SetTimer(MeleeComboTimerHandle, this, &AWeaponBase::ResetCombo, 1.0f, false, 1.0f);
+		ComboCnt = (ComboCnt + 1);
 	}
 }
 
 void AWeaponBase::StopAttack()
 {
 	GetWorldTimerManager().ClearTimer(MeleeAtkTimerHandle);
+	MeleeLineTraceQueryParams.AddIgnoredActor(OwnerCharacterRef);
+	MeleeLineTraceQueryParams.ClearIgnoredActors();
 }
 
 void AWeaponBase::InitWeaponStat(FWeaponStatStruct NewStat)
@@ -70,8 +69,15 @@ AProjectileBase* AWeaponBase::CreateProjectile()
 	FTransform SpawnTransform = { SpawnRotation, SpawnLocation, {1.0f, 1.0f, 1.0f} };
 
 	AProjectileBase* newProjectile = Cast<AProjectileBase>(GetWorld()->SpawnActor(ProjectileClass, &SpawnTransform, SpawnParams));
-	if(IsValid(newProjectile)) newProjectile->SetSpawnInstigator(OwnerCharacterRef->GetController());
-	return newProjectile;
+
+	if (IsValid(newProjectile))
+	{
+		newProjectile->InitProjectile(WeaponStat.ProjectileStat, OwnerCharacterRef);
+		UE_LOG(LogTemp, Warning, TEXT("PROJECTILE CREATE"));
+		return newProjectile;
+	}
+
+	return nullptr;
 }
 
 bool AWeaponBase::TryReload()
@@ -134,28 +140,30 @@ void AWeaponBase::MeleeAttack()
 	FVector EndLocation = WeaponMesh->GetSocketLocation(FName("End"));
 
 	//LineTrace를 통해 hit 된 물체들을 추적
-	GetWorld()->LineTraceSingleByChannel(hitResult, StartLocation, EndLocation, ECollisionChannel::ECC_Camera, linetraceCollisionQueryParams);
+	GetWorld()->LineTraceSingleByChannel(hitResult, StartLocation, EndLocation, ECollisionChannel::ECC_Camera, MeleeLineTraceQueryParams);
 	
+	DrawDebugLine(GetWorld(), StartLocation, EndLocation, FColor(255, 0, 0), false, 1.0f, 0, 1.5f);
+
 	//hit 되었다면?
-	if (hitResult.bBlockingHit && IsValid(OwnerCharacterRef))
+	if (hitResult.bBlockingHit && hitResult.GetActor()->ActorHasTag("Character") && hitResult.GetActor() != OwnerCharacterRef)
 	{
 		//데미지를 주고
-		UGameplayStatics::ApplyDamage(hitResult.GetActor(), WeaponStat.WeaponDamage, OwnerCharacterRef->GetController(), OwnerCharacterRef, nullptr);
+		UGameplayStatics::ApplyDamage(hitResult.GetActor(), WeaponStat.WeaponDamage
+										, OwnerCharacterRef->GetController(), OwnerCharacterRef, nullptr);
 
 		//효과 이미터 출력
 		if (IsValid(HitEffectParticle))
 		{
-			FTransform emitterSpawnTransform(FQuat(0.0f), FVector(1.0f), hitResult.Location);
-			linetraceCollisionQueryParams.AddIgnoredActor(hitResult.GetActor());
+			FTransform emitterSpawnTransform(FQuat(0.0f), hitResult.Location, FVector(1.0f));
+			MeleeLineTraceQueryParams.AddIgnoredActor(hitResult.GetActor());
 			UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), HitEffectParticle, emitterSpawnTransform, true, EPSCPoolMethod::None, true);
 		}
 	}
 }
 
-void AWeaponBase::ResetMeleeCombo()
+void AWeaponBase::ResetCombo()
 {
-	MeleeComboCnt = 0;
-	linetraceCollisionQueryParams.ClearIgnoredActors();
+	ComboCnt = 0;
 }
 
 // Called every frame
@@ -169,5 +177,6 @@ void AWeaponBase::InitOwnerCharacterRef(ACharacterBase* NewCharacterRef)
 {
 	if (!IsValid(NewCharacterRef)) return;
 	OwnerCharacterRef = NewCharacterRef;
+	MeleeLineTraceQueryParams.AddIgnoredActor(NewCharacterRef);
 }
 

@@ -58,7 +58,7 @@ void AMainCharacterBase::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 
 	PlayerInputComponent->BindAction("Dash", IE_Pressed, this, &AMainCharacterBase::Dash);
 	PlayerInputComponent->BindAction("Roll", IE_Pressed, this, &AMainCharacterBase::Roll);
-	PlayerInputComponent->BindAction("Attack", IE_Pressed, this, &AMainCharacterBase::Attack);
+	PlayerInputComponent->BindAction("Attack", IE_Pressed, this, &AMainCharacterBase::TryAttack);
 	PlayerInputComponent->BindAction("Reload", IE_Pressed, this, &AMainCharacterBase::TryReload);
 }
 
@@ -76,14 +76,14 @@ void AMainCharacterBase::MoveRight(float Value)
 
 void AMainCharacterBase::Dash()
 {
-	if (CharacterState.bIsRolling || !IsValid(RollAnimMontage)) return;
+	if (!IsValid(RollAnimMontage) || !GetIsActionActive(ECharacterActionType::E_Idle)) return;
 	
 	PlayAnimMontage(RollAnimMontage);
 	LaunchCharacter(GetMesh()->GetForwardVector() + FVector( 0.0f, 0.0f, 500.0f ), false, false);
-	CharacterState.bIsRolling = true; 
+	CharacterState.CharacterActionState = ECharacterActionType::E_Roll;
 
 	GetWorld()->GetTimerManager().SetTimer(DelayHandle, FTimerDelegate::CreateLambda([&]() {
-		CharacterState.bIsRolling = false;
+		ResetActionState();
 	}), 0.5f, false);
 }
 
@@ -92,24 +92,16 @@ void AMainCharacterBase::TryReload()
 	Super::TryReload();
 }
 
+void AMainCharacterBase::TryAttack()
+{
+	Super::TryAttack();
+}
+
 void AMainCharacterBase::Attack()
 {
-	if (!CharacterState.bCanAttack) return;
-
 	Super::Attack();
-	if (IsValid(WeaponActor->GetChildActor()))
-	{
-		AWeaponBase* weaponRef = Cast<AWeaponBase>(WeaponActor->GetChildActor());
-
-		if (AttackAnimMontageArray.Num() > 0)
-		{
-			const int32 nextAnimIdx = weaponRef->GetCurrentMeleeComboCnt() % AttackAnimMontageArray.Num();
-			//UE_LOG(LogTemp, Warning, TEXT("idx : %d"), nextAnimIdx);
-			PlayAnimMontage(AttackAnimMontageArray[nextAnimIdx]);
-			weaponRef->Attack();
-		}
-	}
 }
+
 
 void AMainCharacterBase::StopAttack()
 {

@@ -35,13 +35,10 @@ public:
 	UFUNCTION(BlueprintCallable)
 		void ActivateProjectileMovement();
 
-	UFUNCTION()
-		void SetSpawnInstigator(AController* NewInstigator);
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+		ACharacterBase* GetOwnerCharacterRef() { return OwnerCharacterRef; }
 
 public:	
-	//UPROPERTY(EditDefaultsOnly)
-	//	USceneComponent* DefaultSceneRoot;
-
 	UPROPERTY(VisibleDefaultsOnly)
 		USphereComponent* SphereCollision;
 

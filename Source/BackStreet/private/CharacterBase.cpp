@@ -21,6 +21,7 @@ ACharacterBase::ACharacterBase()
 	WeaponActor = CreateDefaultSubobject<UChildActorComponent>(TEXT("WEAPON"));
 	WeaponActor->SetupAttachment(GetMesh(), FName("Weapon_R"));
 
+	
 	this->Tags.Add("Character");
 }
 
@@ -38,6 +39,7 @@ void ACharacterBase::InitCharacterState()
 	GetCharacterMovement()->MaxWalkSpeed = CharacterStat.CharacterMoveSpeed;
 	CharacterState.CharacterCurrHP = CharacterStat.CharacterMaxHP;
 	CharacterState.bCanAttack = true;
+	CharacterState.CharacterActionState = ECharacterActionType::E_Idle;
 }
 
 void ACharacterBase::UpdateCharacterStat(FCharacterStatStruct NewStat)
@@ -46,16 +48,26 @@ void ACharacterBase::UpdateCharacterStat(FCharacterStatStruct NewStat)
 	GetCharacterMovement()->MaxWalkSpeed = CharacterStat.CharacterMoveSpeed;
 }
 
+void ACharacterBase::ResetActionState()
+{
+	CharacterState.CharacterActionState = ECharacterActionType::E_Idle;
+	if (!GetWorldTimerManager().IsTimerActive(AtkIntervalHandle))
+	{
+		CharacterState.bCanAttack = true;
+	}
+}
+
 float ACharacterBase::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator
 								, AActor* DamageCauser)
 {
 	DamageAmount = DamageAmount - DamageAmount * CharacterStat.CharacterDefense;
 	if (DamageAmount <= 0.0f || !IsValid(DamageCauser)) return 0.0f;
 	if (CharacterState.bIsInvincibility) return 0.0f;
+
 	Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
-	CharacterState.CharacterCurrHP -= DamageAmount;
-	CharacterState.CharacterCurrHP = FMath::Max(0.0f, CharacterState.CharacterCurrHP - DamageAmount);
+	CharacterState.CharacterCurrHP = CharacterState.CharacterCurrHP - DamageAmount;
+	CharacterState.CharacterCurrHP = FMath::Max(0.0f, CharacterState.CharacterCurrHP);
 	if (CharacterState.CharacterCurrHP == 0.0f)
 	{
 		Die();
@@ -73,7 +85,6 @@ float ACharacterBase::TakeDebuffDamage(float DamageAmount, uint8 DebuffType, AAc
 	if (!IsValid(Causer) || BuffRemainingTime[1][(int)DebuffType] <= 0.0f) return 0.0f;
 
 	BuffRemainingTime[1][(int)DebuffType] -= 1.0f;
-
 	TakeDamage(DamageAmount, FDamageEvent(), nullptr, Causer);
 
 	if (BuffRemainingTime[1][(int)DebuffType] <= 0.0f)
@@ -99,17 +110,64 @@ void ACharacterBase::TakeHeal(float HealAmount, bool bIsTimerEvent, uint8 BuffTy
 	}
 }
 
-void ACharacterBase::Attack()
+void ACharacterBase::Die()
 {
-	if (!CharacterState.bCanAttack || CharacterState.bIsAttacking) return;
-	CharacterState.bIsAttacking = true;
-	CharacterState.bCanAttack = false;
-	GetWorldTimerManager().SetTimer(AtkIntervalHandle, this, &ACharacterBase::ResetAtkIntervalTimer, 1.0f, false, 1.0f - CharacterStat.CharacterAtkSpeed);
+	if (!IsValid(DieAnimMontage)) return;
+
+	CharacterState.bIsInvincibility = true;
+	ClearAllBuffTimer(true);
+	ClearAllBuffTimer(false);
+	ClearAllTimerHandle();
+	
+	PlayAnimMontage(DieAnimMontage);
+	GetCharacterMovement()->Deactivate();
+	bUseControllerRotationYaw = false;
+
+	GetWorldTimerManager().SetTimer(ReloadTimerHandle, FTimerDelegate::CreateLambda([&]() {
+		//GameModeRef->SpawnItemOnLocation(GetActorLocation(), ItemID);
+		Destroy();
+	}), 1.0f, false, DieAnimMontage->GetPlayLength());
 }
 
+void ACharacterBase::TryAttack()
+{
+	if (AttackAnimMontageArray.Num() <= 0) return;
+	if (!IsValid(WeaponActor->GetChildActor())) return;
+	if (!CharacterState.bCanAttack || !GetIsActionActive(ECharacterActionType::E_Idle)) return;
+
+	AWeaponBase* weaponRef = Cast<AWeaponBase>(WeaponActor->GetChildActor());
+	if (IsValid(weaponRef))
+	{
+		CharacterState.bCanAttack = false; //공격간 Delay,Interval 조절을 위해 세팅
+		CharacterState.CharacterActionState = ECharacterActionType::E_Attack;
+
+		const int32 nextAnimIdx = weaponRef->GetCurrentComboCnt() % AttackAnimMontageArray.Num();
+		UE_LOG(LogTemp, Warning, TEXT("Current Combo : %d  / Anim Idx : %d"), weaponRef->GetCurrentComboCnt(), weaponRef->GetCurrentComboCnt() % AttackAnimMontageArray.Num());
+		PlayAnimMontage(AttackAnimMontageArray[nextAnimIdx]);
+	}
+}
+
+void ACharacterBase::Attack()
+{
+	GetWorldTimerManager().ClearTimer(AtkIntervalHandle);
+	GetWorldTimerManager().SetTimer(AtkIntervalHandle, this, &ACharacterBase::ResetAtkIntervalTimer
+										, 1.0f, false, 1.0f - CharacterStat.CharacterAtkSpeed);
+
+	AWeaponBase* weaponRef = Cast<AWeaponBase>(WeaponActor->GetChildActor());
+	if (IsValid(weaponRef))
+	{
+		weaponRef->Attack();
+	}
+}
+ 
 void ACharacterBase::StopAttack()
 {
-	CharacterState.bIsAttacking = false;
+	ResetActionState();
+	AWeaponBase* weaponRef = Cast<AWeaponBase>(WeaponActor->GetChildActor());
+	if (IsValid(weaponRef))
+	{
+		weaponRef->StopAttack();
+	}
 }
 
 void ACharacterBase::TryReload()
@@ -125,10 +183,10 @@ void ACharacterBase::TryReload()
 		float reloadTime = 0.75f;
 		if (IsValid(ReloadAnimMontage)) reloadTime = PlayAnimMontage(ReloadAnimMontage) / 2.0f;
 
-		CharacterState.bCanAttack = false;
+		CharacterState.CharacterActionState = ECharacterActionType::E_Reload;
 		GetWorldTimerManager().SetTimer(ReloadTimerHandle, FTimerDelegate::CreateLambda([&](){
 			GetWeaponActorRef()->TryReload();
-			CharacterState.bCanAttack = true;
+			ResetActionState();
 		}), 1.0f, false, reloadTime);
 	}
 	else
@@ -142,6 +200,7 @@ void ACharacterBase::ResetAtkIntervalTimer()
 {
 	CharacterState.bCanAttack = true;
 	GetWorldTimerManager().ClearTimer(AtkIntervalHandle);
+	UE_LOG(LogTemp, Warning, TEXT("RESET ATK INTERVAL"));
 }
 
 void ACharacterBase::InitWeapon()
@@ -348,6 +407,15 @@ bool ACharacterBase::GetBuffIsActive(ECharacterBuffType BuffType)
 	return false;
 }
 
+void ACharacterBase::ClearAllTimerHandle()
+{
+	ClearAllBuffTimer(false);
+	ClearAllBuffTimer(true);
+	GetWorldTimerManager().ClearTimer(DelayHandle);
+	GetWorldTimerManager().ClearTimer(AtkIntervalHandle);
+	GetWorldTimerManager().ClearTimer(ReloadTimerHandle);
+}
+
 // Called every frame
 void ACharacterBase::Tick(float DeltaTime)
 {
@@ -361,4 +429,5 @@ void ACharacterBase::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
 }
+
 

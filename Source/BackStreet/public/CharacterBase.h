@@ -23,6 +23,10 @@ public:
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
+	//Input에 Binding 되어 공격을 시도 (AnimMontage를 호출)
+	virtual void TryAttack();
+
+	//AnimNotify에 Binding 되어 실제 공격을 수행
 	virtual void Attack();
 
 	virtual void StopAttack();
@@ -40,21 +44,17 @@ public:
 
 // ------- Character Action 기본 ------- 
 public:
-	//캐릭터의 상태 정보를 초기화
-	UFUNCTION()
-		void InitCharacterState();
-
-	//캐릭터의 스탯을 업데이트
+	//플레이어가 현재 해당 Action을 수행하고 있는지 반환
 	UFUNCTION(BlueprintCallable)
-		void UpdateCharacterStat(FCharacterStatStruct NewStat);
+		bool GetIsActionActive(ECharacterActionType Type) { return CharacterState.CharacterActionState == Type; }
+	
+	//플레이어의 ActionState를 Idle로 전환한다.
+	UFUNCTION(BlueprintCallable)
+		void ResetActionState();
 
 	UFUNCTION()
 		virtual float TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent
 			, AController* EventInstigator, AActor* DamageCauser) override;
-
-	//공격Action 사이의 Interval을 관리하는 타이머를 해제
-	UFUNCTION()
-		void ResetAtkIntervalTimer();
 
 	//디버프 데미지를 입힘 (일회성)
 	UFUNCTION()
@@ -64,8 +64,21 @@ public:
 	UFUNCTION()
 		void TakeHeal(float HealAmount, bool bIsTimerEvent = false, uint8 BuffType = 0);
 
-	UFUNCTION(BlueprintImplementableEvent)
+	UFUNCTION()
 		void Die();
+
+// ------- Character Stat/State ------- 
+public:
+	//캐릭터의 상태 정보를 초기화
+	UFUNCTION()
+		void InitCharacterState();
+
+	//캐릭터의 스탯을 업데이트
+	UFUNCTION(BlueprintCallable)
+		void UpdateCharacterStat(FCharacterStatStruct NewStat);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+		FCharacterStatStruct GetCharacterStat() { return CharacterStat; }
 
 // ------ 무기 관련 ----------------
 public:
@@ -79,6 +92,10 @@ public:
 	//무기 Ref를 반환
 	UFUNCTION(BlueprintCallable, BlueprintPure)
 		class AWeaponBase* GetWeaponActorRef();
+
+	//공격Action 사이의 Interval을 관리하는 타이머를 해제
+	UFUNCTION()
+		void ResetAtkIntervalTimer();
 
 // ------ 캐릭터 버프 / 디버프 ---------------
 public:
@@ -123,14 +140,17 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Gameplay|Animation")
 		class UAnimMontage* ReloadAnimMontage;
 
-// ------ 그 외 캐릭터 프로퍼티 ---------------
+// ------ 그 외 캐릭터 프로퍼티 / 함수 ---------------
 protected:
+	UFUNCTION()
+		void ClearAllTimerHandle();
+
 	//캐릭터의 스탯
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Gameplay")
 		FCharacterStatStruct CharacterStat;
 
 	//캐릭터의 현재 상태
-	UPROPERTY(BlueprintReadOnly, Category = "Gameplay")
+	UPROPERTY(BlueprintReadOnly, BlueprintReadOnly, Category = "Gameplay")
 		FCharacterStateStruct CharacterState;
 
 	UPROPERTY()
