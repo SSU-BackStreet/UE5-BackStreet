@@ -62,7 +62,7 @@ float ACharacterBase::TakeDamage(float DamageAmount, FDamageEvent const& DamageE
 {
 	DamageAmount = DamageAmount - DamageAmount * CharacterStat.CharacterDefense;
 	if (DamageAmount <= 0.0f || !IsValid(DamageCauser)) return 0.0f;
-	if (CharacterState.bIsInvincibility) return 0.0f;
+	if (CharacterStat.bIsInvincibility) return 0.0f;
 
 	Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
@@ -114,7 +114,8 @@ void ACharacterBase::Die()
 {
 	if (!IsValid(DieAnimMontage)) return;
 
-	CharacterState.bIsInvincibility = true;
+	CharacterState.CharacterActionState = ECharacterActionType::E_Die;
+	CharacterStat.bIsInvincibility = true;
 	ClearAllBuffTimer(true);
 	ClearAllBuffTimer(false);
 	ClearAllTimerHandle();
@@ -224,7 +225,8 @@ void ACharacterBase::SetBuffTimer(bool bIsDebuff, uint8 BuffType, AActor* Causer
 {
 	FTimerDelegate TimerDelegate;
 	FTimerHandle& timerHandle = BuffTimerHandle[bIsDebuff][(int)BuffType];
-	
+	float ResetVal = 0.0f;
+
 	if ((bIsDebuff && GetDebuffIsActive((ECharacterDebuffType)BuffType))
 		&& (!bIsDebuff && GetBuffIsActive((ECharacterBuffType)BuffType)))
 	{
@@ -247,33 +249,40 @@ void ACharacterBase::SetBuffTimer(bool bIsDebuff, uint8 BuffType, AActor* Causer
 			//SpawnBuffParticle(E_Flame, TotalTime) //TimerDelegate에 걸어도 됨
 			TimerDelegate.BindUFunction(this, FName("TakeDebuffDamage"), Variable, BuffType, Causer);
 			GetWorldTimerManager().SetTimer(timerHandle, TimerDelegate, 1.0f, true);
-			break;
+			return;
 
 		//----스탯 조정 디버프-------------------
 		case ECharacterDebuffType::E_Sleep:
+			CharacterState.CharacterActionState = ECharacterActionType::E_Sleep;
+			GetCharacterMovement()->SetMovementMode(EMovementMode::MOVE_None);
+			break;
 		case ECharacterDebuffType::E_Slow:
+			GetCharacterMovement()->MaxWalkSpeed *= FMath::Abs(Variable);
+			break;
 		case ECharacterDebuffType::E_AttackDown:
+			ResetVal = CharacterStat.CharacterAtkMultiplier;
+			CharacterStat.CharacterAtkMultiplier *= FMath::Abs(Variable);
+			break;
 		case ECharacterDebuffType::E_DefenseDown:
-			if (BuffType == (uint8)ECharacterDebuffType::E_Sleep)
+			ResetVal = CharacterStat.CharacterDefense;
+			CharacterStat.CharacterDefense *= FMath::Abs(Variable);
+			break;
+		case ECharacterDebuffType::E_SlowAtk:
+			ResetVal = CharacterStat.CharacterAtkSpeed;
+			CharacterStat.CharacterAtkSpeed *= FMath::Abs(Variable);
+			break;
+		case ECharacterDebuffType::E_SlowProjectile:
+			if (IsValid(GetWeaponActorRef()))
 			{
-				GetCharacterMovement()->SetMovementMode(EMovementMode::MOVE_None);
+				ResetVal = GetWeaponActorRef()->WeaponStat.ProjectileStat.ProjectileSpeed;
+				GetWeaponActorRef()->WeaponStat.ProjectileStat.ProjectileSpeed *= Variable;
 			}
-			else if (BuffType == (uint8)ECharacterDebuffType::E_Slow)
-			{
-				GetCharacterMovement()->MaxWalkSpeed *= FMath::Abs(Variable);
-			}
-			else if (BuffType == (uint8)ECharacterDebuffType::E_AttackDown)
-			{
-				CharacterState.CharacterCurrAtkMultiplier *= FMath::Abs(Variable);
-			}
-			else if (BuffType == (uint8)ECharacterDebuffType::E_DefenseDown)
-			{
-				CharacterState.CharacterCurrDefense *= FMath::Abs(Variable);
-			}
-			TimerDelegate.BindUFunction(this, FName("ResetStatBuffState"), bIsDebuff, BuffType);
-			GetWorldTimerManager().SetTimer(timerHandle, TimerDelegate, 0.1f, false, TotalTime);
 			break;
 		}
+		Variable = ResetVal;
+		TimerDelegate.BindUFunction(this, FName("ResetStatBuffState"), bIsDebuff, BuffType, Variable);
+		GetWorldTimerManager().SetTimer(timerHandle, TimerDelegate, 0.1f, false, TotalTime);
+		return;
 	}
 
 	/*---- 버프 타이머 세팅 ----------------------------*/
@@ -286,63 +295,82 @@ void ACharacterBase::SetBuffTimer(bool bIsDebuff, uint8 BuffType, AActor* Causer
 		case ECharacterBuffType::E_Healing:
 			TimerDelegate.BindUFunction(this, FName("TakeHeal"), Variable, true, BuffType);
 			GetWorldTimerManager().SetTimer(timerHandle, TimerDelegate, 1.0f, true);
-			break;
+			return;
 
 		//----스탯 조정 버프-------------------
-		case ECharacterBuffType::E_DefenseUp:
 		case ECharacterBuffType::E_AttackUp:
+			ResetVal = Variable;
+			CharacterStat.CharacterAtkMultiplier *= Variable;
+			if (IsValid(GetWeaponActorRef()))
+			{
+				GetWeaponActorRef()->WeaponStat.WeaponDamage *= Variable;
+			}
+			break;
+		case ECharacterBuffType::E_DefenseUp:
+			ResetVal = CharacterStat.CharacterDefense;
+			CharacterStat.CharacterDefense *= FMath::Abs(1.0f + Variable);
+			break;
+		case ECharacterBuffType::E_FastAtk:
+			ResetVal = CharacterStat.CharacterAtkMultiplier;
+			CharacterStat.CharacterAtkMultiplier *= FMath::Abs(1.0f + Variable);
+			break;
+		case ECharacterBuffType::E_FastProjectile:
+			if (IsValid(GetWeaponActorRef()))
+			{
+				ResetVal = GetWeaponActorRef()->WeaponStat.ProjectileStat.ProjectileSpeed;
+				GetWeaponActorRef()->WeaponStat.ProjectileStat.ProjectileSpeed *= (1.0f + Variable);
+			}
+			break;
 		case ECharacterBuffType::E_Invincibility:
+			ResetVal = 0.0f;
+			CharacterStat.bIsInvincibility = true;
+			break;
+		case ECharacterBuffType::E_InfiniteAmmo:
+			if (IsValid(GetWeaponActorRef()))
+			{
+				CharacterStat.bInfiniteAmmo = true;
+				GetWeaponActorRef()->SetInfiniteAmmoMode(true);
+			}
+			break;
 		case ECharacterBuffType::E_SpeedUp:
-			if (BuffType == (uint8)ECharacterBuffType::E_DefenseUp)
-			{
-				CharacterState.CharacterCurrDefense *= FMath::Abs(Variable);
-			}
-			else if (BuffType == (uint8)ECharacterBuffType::E_AttackUp)
-			{
-				CharacterState.CharacterCurrAtkMultiplier *= FMath::Abs(Variable);
-			}
-			else if (BuffType == (uint8)ECharacterBuffType::E_Invincibility)
-			{
-				CharacterState.bIsInvincibility = true;
-			}
-			else if (BuffType == (uint8)ECharacterBuffType::E_SpeedUp)
-			{
-				GetCharacterMovement()->MaxWalkSpeed *= 2;
-			}
-			else if (BuffType == (uint8)ECharacterBuffType::E_InfiniteAmmo)
-			{
-				if (IsValid(GetWeaponActorRef()))
-				{
-					CharacterState.bInfiniteAmmo = true;
-					GetWeaponActorRef()->SetInfiniteAmmoMode(true);
-				}
-			}
-			TimerDelegate.BindUFunction(this, FName("ResetStatBuffState"), bIsDebuff, BuffType);
-			GetWorldTimerManager().SetTimer(timerHandle, TimerDelegate, 0.1f, false, TotalTime);
+			ResetVal = GetCharacterMovement()->MaxWalkSpeed;
+			GetCharacterMovement()->MaxWalkSpeed *= Variable;
 			break;
 		}
+		Variable = ResetVal;
+		TimerDelegate.BindUFunction(this, FName("ResetStatBuffState"), bIsDebuff, BuffType, Variable);
+		GetWorldTimerManager().SetTimer(timerHandle, TimerDelegate, 0.1f, false, TotalTime);
 	}
 }
 
-void ACharacterBase::ResetStatBuffState(bool bIsDebuff, uint8 BuffType)
+void ACharacterBase::ResetStatBuffState(bool bIsDebuff, uint8 BuffType, float ResetVal)
 {
 	if (bIsDebuff)
 	{
 		switch ((ECharacterDebuffType)BuffType)
 		{
-		case ECharacterDebuffType::E_Sleep:
-			//WakeUp Animation
-			GetCharacterMovement()->SetMovementMode(EMovementMode::MOVE_Walking);
-			break;
 		case ECharacterDebuffType::E_Slow:
 			GetCharacterMovement()->MaxWalkSpeed = CharacterStat.CharacterMoveSpeed;
-			UE_LOG(LogTemp, Warning, TEXT("ResetSLOW - %d"), CharacterStat.CharacterMoveSpeed);
+			break;
+		case ECharacterDebuffType::E_Sleep:
+			//WakeUp Animation
+			CharacterState.CharacterActionState = ECharacterActionType::E_Idle;
+			GetCharacterMovement()->SetMovementMode(EMovementMode::MOVE_Walking);
 			break;
 		case ECharacterDebuffType::E_AttackDown:
-			CharacterState.CharacterCurrAtkMultiplier = CharacterStat.CharacterAtkMultiplier;
+			CharacterStat.CharacterAtkMultiplier = ResetVal;
 			break;
 		case ECharacterDebuffType::E_DefenseDown:
-			CharacterState.CharacterCurrDefense = CharacterStat.CharacterDefense;
+			CharacterStat.CharacterDefense = ResetVal;
+			break;
+		case ECharacterDebuffType::E_SlowAtk:
+			CharacterStat.CharacterAtkSpeed = ResetVal;
+			break;
+		case ECharacterDebuffType::E_SlowProjectile:
+			if (IsValid(GetWeaponActorRef()))
+			{
+				GetWeaponActorRef()->WeaponStat.ProjectileStat.ProjectileSpeed = ResetVal;
+			}
 			break;
 		}
 	}
@@ -351,21 +379,34 @@ void ACharacterBase::ResetStatBuffState(bool bIsDebuff, uint8 BuffType)
 		switch ((ECharacterBuffType)BuffType)
 		{
 		case ECharacterBuffType::E_DefenseUp:
-			CharacterState.CharacterCurrDefense = CharacterStat.CharacterDefense;
+			CharacterStat.CharacterDefense = ResetVal;
 			break;
 		case ECharacterBuffType::E_AttackUp:
-			CharacterState.CharacterCurrAtkMultiplier = CharacterStat.CharacterAtkMultiplier;
+			CharacterStat.CharacterAtkMultiplier = ResetVal;
+			if (IsValid(GetWeaponActorRef()) && ResetVal != 0.0f)
+			{
+				GetWeaponActorRef()->WeaponStat.WeaponDamage /= ResetVal;
+			}
+			break;
+		case ECharacterBuffType::E_SpeedUp:
+			GetCharacterMovement()->MaxWalkSpeed = ResetVal;
+			break;
+		case ECharacterBuffType::E_FastAtk:
+			CharacterStat.CharacterAtkSpeed = ResetVal;
+			break;
+		case ECharacterBuffType::E_FastProjectile:
+			if (IsValid(GetWeaponActorRef()))
+			{
+				GetWeaponActorRef()->WeaponStat.ProjectileStat.ProjectileSpeed = ResetVal;
+			}
 			break;
 		case ECharacterBuffType::E_Invincibility:
-			CharacterState.bIsInvincibility = false;
+			CharacterStat.bIsInvincibility = false;
 			ClearAllBuffTimer(true);
 			break;
 		case ECharacterBuffType::E_InfiniteAmmo:
-			CharacterState.bInfiniteAmmo = false;
+			CharacterStat.bInfiniteAmmo = false;
 			GetWeaponActorRef()->SetInfiniteAmmoMode(false);
-			break;
-		case ECharacterBuffType::E_SpeedUp:
-			GetCharacterMovement()->MaxWalkSpeed = CharacterStat.CharacterMoveSpeed;
 			break;
 		}
 	}

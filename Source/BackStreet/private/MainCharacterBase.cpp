@@ -3,6 +3,7 @@
 
 #include "../public/MainCharacterBase.h"
 #include "../public/WeaponBase.h"
+#include "../public/MainCharacterController.h"
 #include "Animation/AnimInstance.h"
 #include "TimerManager.h"
 
@@ -38,6 +39,7 @@ void AMainCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
 	
+	PlayerControllerRef = Cast<AMainCharacterController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
 }
 
 // Called every frame
@@ -64,13 +66,13 @@ void AMainCharacterBase::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 
 void AMainCharacterBase::MoveForward(float Value)
 {
-	FVector Direction = FRotationMatrix(this->GetControlRotation()).GetScaledAxis(EAxis::X);
+	FVector Direction = FVector(1.0f, 0.0f, 0.0f);// FRotationMatrix(this->GetControlRotation()).GetScaledAxis(EAxis::X);
 	AddMovementInput(Direction, Value);
 }
 
 void AMainCharacterBase::MoveRight(float Value)
 {
-	FVector Direction = FRotationMatrix(this->GetControlRotation()).GetScaledAxis(EAxis::Y);
+	FVector Direction = FVector(0.0f, 1.0f, 0.0f);//FRotationMatrix(this->GetControlRotation()).GetScaledAxis(EAxis::Y);
 	AddMovementInput(Direction, Value);
 }
 
@@ -78,9 +80,15 @@ void AMainCharacterBase::Dash()
 {
 	if (!IsValid(RollAnimMontage) || !GetIsActionActive(ECharacterActionType::E_Idle)) return;
 	
-	PlayAnimMontage(RollAnimMontage);
-	LaunchCharacter(GetMesh()->GetForwardVector() + FVector( 0.0f, 0.0f, 500.0f ), false, false);
+	FVector newDirection(0.0f);
+	newDirection.X = GetInputAxisValue(FName("MoveForward"));
+	newDirection.Y = GetInputAxisValue(FName("MoveRight"));
+
+	FRotator newRotation = { 0, FMath::Atan2(newDirection.Y, newDirection.X) * 180.0f / 3.141592, 0.0f};
+	GetCapsuleComponent()->SetWorldRotation(newRotation);
+
 	CharacterState.CharacterActionState = ECharacterActionType::E_Roll;
+	PlayAnimMontage(RollAnimMontage);
 
 	GetWorld()->GetTimerManager().SetTimer(DelayHandle, FTimerDelegate::CreateLambda([&]() {
 		ResetActionState();
@@ -95,6 +103,17 @@ void AMainCharacterBase::TryReload()
 void AMainCharacterBase::TryAttack()
 {
 	Super::TryAttack();
+	
+	if (CharacterState.CharacterActionState == ECharacterActionType::E_Idle
+		|| CharacterState.CharacterActionState == ECharacterActionType::E_Attack)
+	{
+		GetCharacterMovement()->bOrientRotationToMovement = false;
+		GetCapsuleComponent()->SetWorldRotation(PlayerControllerRef->GetAimingRotation());
+		GetWorld()->GetTimerManager().ClearTimer(RotationFixTimerHandle);
+		GetWorld()->GetTimerManager().SetTimer(RotationFixTimerHandle, FTimerDelegate::CreateLambda([&]() {
+			GetCharacterMovement()->bOrientRotationToMovement = true;
+			}), 1.0f, false);
+	}
 }
 
 void AMainCharacterBase::Attack()
@@ -111,4 +130,11 @@ void AMainCharacterBase::StopAttack()
 		AWeaponBase* weaponRef = Cast<AWeaponBase>(WeaponActor->GetChildActor());
 		weaponRef->StopAttack();
 	}
+}
+
+void AMainCharacterBase::ClearAllTimerHandle()
+{
+	Super::ClearAllTimerHandle();
+
+	GetWorld()->GetTimerManager().ClearTimer(RotationFixTimerHandle);
 }

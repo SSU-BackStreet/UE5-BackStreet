@@ -2,6 +2,12 @@
 
 
 #include "../public/EnemyCharacterBase.h"
+#include "../public/WeaponBase.h"
+
+AEnemyCharacterBase::AEnemyCharacterBase()
+{
+	this->Tags.Add("Enemy");
+}
 
 void AEnemyCharacterBase::TryAttack()
 {

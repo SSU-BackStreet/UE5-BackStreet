@@ -26,6 +26,7 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
+// ------- Character Action ------- 
 public:
 	UFUNCTION()
 		void MoveForward(float Value);
@@ -51,12 +52,26 @@ public:
 	UFUNCTION(BlueprintCallable)
 		virtual void StopAttack() override;
 
+// -------- 자원 관리 ---------
+public:
+	//UFUNCTION()
+		virtual void ClearAllTimerHandle() override;
+
 public:
 	//플레이어 메인 카메라 붐
 	UPROPERTY(VisibleDefaultsOnly)
 		USpringArmComponent* CameraBoom;
 	
 	//플레이어의 메인 카메라
-	UPROPERTY(VisibleDefaultsOnly)
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly)
 		UCameraComponent* FollowingCamera;
+
+private:
+	UPROPERTY()
+		class AMainCharacterController* PlayerControllerRef;
+
+	//공격 시, 마우스 커서의 위치로 캐릭터가 바라보는 로직을 초기화하는 타이머
+	//초기화 시에는 다시 Movement 방향으로 캐릭터의 Rotation을 Set
+	UPROPERTY()
+		FTimerHandle RotationFixTimerHandle;
 };

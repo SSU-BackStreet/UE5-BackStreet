@@ -31,12 +31,14 @@ public:
 		ECharacterDebuffType DebuffType;
 };
 
+
 USTRUCT(BlueprintType)
 struct FWeaponStatStruct
 {
 public:
 	GENERATED_USTRUCT_BODY()
-		
+	
+	
 	//----- 근접 관련 Property --------------------
 
 	//근접 공격이 가능한 지? 
@@ -58,6 +60,10 @@ public:
 
 	//----- 발사체 관련 Property ------------------
 	
+	//무한 탄약인지?
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+		bool bIsInfiniteAmmo;
+
 	//공격 시, 발사체가 있는지?
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 		bool bHasProjectile;

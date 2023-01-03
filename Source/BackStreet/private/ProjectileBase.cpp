@@ -22,6 +22,10 @@ AProjectileBase::AProjectileBase()
 	SphereCollision->SetCollisionProfileName(TEXT("OverlapAll"));
 	SetRootComponent(SphereCollision);
 	
+	TargetingCollision = CreateDefaultSubobject<USphereComponent>(TEXT("TARGETING_COLLISION"));
+	TargetingCollision->SetupAttachment(SphereCollision);
+	TargetingCollision->SetWorldScale3D(FVector(5.0f));
+
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PROJECTILE_MESH"));
 	Mesh->SetupAttachment(SphereCollision);
 	Mesh->SetRelativeScale3D({ 0.5f, 0.5f, 0.5f });
@@ -37,6 +41,7 @@ void AProjectileBase::BeginPlay()
 {
 	Super::BeginPlay();
 	SphereCollision->OnComponentBeginOverlap.AddDynamic(this, &AProjectileBase::OnProjectileBeginOverlap);
+	SphereCollision->OnComponentBeginOverlap.AddDynamic(this, &AProjectileBase::OnTargetBeginOverlap);
 }
 
 void AProjectileBase::InitProjectile(FProjectileStatStruct NewStat, ACharacterBase* NewCharacterRef)
@@ -46,6 +51,8 @@ void AProjectileBase::InitProjectile(FProjectileStatStruct NewStat, ACharacterBa
 		OwnerCharacterRef = NewCharacterRef;
 		SpawnInstigator = OwnerCharacterRef->GetController();
 		ProjectileStat = NewStat;
+		ProjectileMovement->InitialSpeed = NewStat.ProjectileSpeed;
+		ProjectileMovement->MaxSpeed = NewStat.ProjectileSpeed;
 		UE_LOG(LogTemp, Warning, TEXT("INIT PROJECTILE"));
 	}
 }
@@ -66,9 +73,20 @@ void AProjectileBase::OnProjectileBeginOverlap(UPrimitiveComponent* OverlappedCo
 	Destroy();
 }
 
+void AProjectileBase::OnTargetBeginOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+	if (!IsValid(OtherActor) || !IsValid(OwnerCharacterRef)) return;
+	if ( OtherActor->ActorHasTag(OwnerCharacterRef->Tags[1])) return;
+	if (!ProjectileStat.bIsHoming || OtherActor == OwnerCharacterRef || !bIsActivated) return;
+
+	ProjectileMovement->HomingTargetComponent = OverlappedComp;
+	ProjectileMovement->bIsHomingProjectile = true;
+}
+
 void AProjectileBase::ActivateProjectileMovement()
 {
 	ProjectileMovement->Activate();
+	bIsActivated = true; 
 }
 
 // Called every frame

@@ -32,6 +32,10 @@ public:
 		void OnProjectileBeginOverlap(class UPrimitiveComponent* OverlappedComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp, int32 OtherBodyIndex
 								, bool bFromSweep, const FHitResult& SweepResult);
 
+	UFUNCTION()
+		void OnTargetBeginOverlap(class UPrimitiveComponent* OverlappedComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp, int32 OtherBodyIndex
+			, bool bFromSweep, const FHitResult& SweepResult);
+
 	UFUNCTION(BlueprintCallable)
 		void ActivateProjectileMovement();
 
@@ -41,6 +45,9 @@ public:
 public:	
 	UPROPERTY(VisibleDefaultsOnly)
 		USphereComponent* SphereCollision;
+
+	UPROPERTY(VisibleDefaultsOnly)
+		USphereComponent* TargetingCollision;
 
 	UPROPERTY(VisibleDefaultsOnly)
 		UStaticMeshComponent* Mesh; 
@@ -56,6 +63,9 @@ protected:
 		struct FProjectileStatStruct ProjectileStat;
 
 private: 
+	UPROPERTY()
+		bool bIsActivated = false;
+
 	UPROPERTY()
 		AController* SpawnInstigator;
 

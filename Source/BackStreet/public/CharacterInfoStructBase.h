@@ -6,22 +6,27 @@
 UENUM(BlueprintType)
 enum class ECharacterDebuffType : uint8
 {
-	E_Flame			UMETA(DisplayName = "Flame"),
-	E_Poison		UMETA(DisplayName = "Poison"),
-	E_Slow			UMETA(DisplayName = "Slow"),
-	E_Sleep			UMETA(DisplayName = "Sleep"),
-	E_DefenseDown	UMETA(DisplayName = "DefenseDown"),
-	E_AttackDown	UMETA(DisplayName = "AttackDown")
+	E_None				UMETA(DisplayName = "None"),
+	E_Flame				UMETA(DisplayName = "Flame"),
+	E_Poison			UMETA(DisplayName = "Poison"),
+	E_Slow				UMETA(DisplayName = "Slow"),
+	E_Sleep				UMETA(DisplayName = "Sleep"),
+	E_AttackDown		UMETA(DisplayName = "AttackDown"),
+	E_DefenseDown		UMETA(DisplayName = "DefenseDown"),
+	E_SlowAtk			UMETA(DisplayName = "SlowAtk"),
+	E_SlowProjectile	UMETA(DisplayName = "SlowProjectile")
 };
 
 UENUM(BlueprintType)
 enum class ECharacterBuffType : uint8
 {
-	E_SpeedUp			UMETA(DisplayName = "SpeedUp"),
+	E_None				UMETA(DisplayName = "None"),
 	E_Healing			UMETA(DisplayName = "Healing"),
-	E_FastAtk			UMETA(DisplayName = "FastAtk"),
-	E_DefenseUp			UMETA(DisplayName = "DefenseUp"),
 	E_AttackUp			UMETA(DisplayName = "AttackUp"),
+	E_DefenseUp			UMETA(DisplayName = "DefenseUp"),
+	E_SpeedUp			UMETA(DisplayName = "SpeedUp"),
+	E_FastAtk			UMETA(DisplayName = "FastAtk"),
+	E_FastProjectile	UMETA(DisplayName = "FastProjectile"),
 	E_Invincibility		UMETA(DisplayName = "Invincibility"),
 	E_InfiniteAmmo		UMETA(DisplayName = "InfiniteAmmo")
 };
@@ -35,6 +40,7 @@ enum class ECharacterActionType : uint8
 	E_Roll			UMETA(DisplayName = "Roll"),
 	E_Jump			UMETA(DisplayName = "Jump"),
 	E_Reload		UMETA(DisplayName = "Reload"),
+	E_Sleep			UMETA(DisplayName = "Sleep"),
 	E_Die			UMETA(DisplayName = "Die")
 };
 
@@ -43,6 +49,12 @@ struct FCharacterStatStruct
 {
 public:
 	GENERATED_USTRUCT_BODY()
+
+	UPROPERTY(BlueprintReadOnly)
+	bool bIsInvincibility = false;
+
+	UPROPERTY(BlueprintReadOnly)
+		bool bInfiniteAmmo = false;
 
 	//PlayerMaxHP´Â 1.0f
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, meta = (UIMin = 0.5f, UIMax = 10.0f))
@@ -82,23 +94,8 @@ public:
 	UPROPERTY(BlueprintReadWrite)
 		ECharacterActionType CharacterActionState;
 
-	UPROPERTY(BlueprintReadOnly)
-		bool bIsInvincibility = false;
-
-	UPROPERTY(BlueprintReadOnly)
-		bool bInfiniteAmmo = false;
-
 	//PlayerMaxHP´Â 1.0f
 	UPROPERTY(BlueprintReadOnly)
 		float CharacterCurrHP;
-
-	UPROPERTY(BlueprintReadOnly)
-		float CharacterCurrAtkMultiplier = 1.0f;
-
-	UPROPERTY(BlueprintReadOnly)
-		float CharacterCurrAtkSpeed = 1.0f;
-
-	UPROPERTY(BlueprintReadOnly)
-		float CharacterCurrDefense = 0.0f;
 };
 

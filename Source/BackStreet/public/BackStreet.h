@@ -5,4 +5,5 @@
 #include "EngineMinimal.h"
 #include "WeaponStatStructBase.h"
 #include "CollisionQueryParams.h"
+#include "Perception/AIPerceptionTypes.h"
 #include "CharacterInfoStructBase.h"

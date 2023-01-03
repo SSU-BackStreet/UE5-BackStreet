@@ -84,7 +84,7 @@ public:
 		void AddMagazine(int32 Count);
 
 	UFUNCTION()
-		void SetInfiniteAmmoMode(bool NewMode) { bInfiniteAmmo = NewMode; }
+		void SetInfiniteAmmoMode(bool NewMode) { WeaponStat.bIsInfiniteAmmo = NewMode; }
 
 protected:
 	//SoftObjRef로 대체 예정
@@ -98,10 +98,6 @@ protected:
 	//가지고 있는 최대 발사체 수
 	UPROPERTY(BlueprintReadOnly)
 		int32 MaxAmmoCount = 0;
-
-	//무한 버프 (임시), WeaponStat 추가 예정
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Gameplay|Stat")
-		bool bInfiniteAmmo = false;
 
 //-------- Melee 관련 ------------
 public:
